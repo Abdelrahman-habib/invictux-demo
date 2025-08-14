@@ -434,7 +434,16 @@ func TestManager_TestConnectivity(t *testing.T) {
 		device := createTestDevice()
 
 		err := manager.TestConnectivity(device)
-		assert.NoError(t, err) // Should not error for valid device (placeholder implementation)
+		// Since we're testing with a real IP that may not be reachable,
+		// we expect either no error (if reachable) or a connectivity error
+		if err != nil {
+			deviceErr, ok := err.(*DeviceError)
+			require.True(t, ok)
+			assert.Equal(t, "connectivity", deviceErr.Type)
+		}
+		// The device status should be updated regardless
+		assert.NotEmpty(t, device.Status)
+		assert.NotNil(t, device.LastChecked)
 	})
 
 	t.Run("nil device", func(t *testing.T) {

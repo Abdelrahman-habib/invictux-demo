@@ -434,10 +434,8 @@ func (m *Manager) DeleteDevice(id string) error {
 	return nil
 }
 
-// TestConnectivity tests the connectivity to a device (placeholder implementation)
+// TestConnectivity tests the connectivity to a device using the connectivity scanner
 func (m *Manager) TestConnectivity(device *Device) error {
-	// This is a placeholder implementation for the interface
-	// The actual connectivity testing will be implemented in the scanner component
 	if device == nil {
 		return &DeviceError{
 			Type:    ErrorTypeValidation,
@@ -452,7 +450,48 @@ func (m *Manager) TestConnectivity(device *Device) error {
 		}
 	}
 
-	// TODO: Implement actual connectivity testing
-	// This will be done in task 2.3 "Build device connectivity scanner"
+	// Create a connectivity scanner
+	scanner := NewConnectivityScanner()
+
+	// Test connectivity
+	result, err := scanner.TestConnectivity(device)
+	if err != nil {
+		return &DeviceError{
+			Type:    ErrorTypeDatabase,
+			Message: fmt.Sprintf("connectivity test failed: %v", err),
+		}
+	}
+
+	// Update device status based on connectivity result
+	if result.NetworkReachable && result.SSHPortOpen {
+		device.Status = string(StatusOnline)
+	} else if result.NetworkReachable {
+		device.Status = string(StatusWarning)
+	} else {
+		device.Status = string(StatusOffline)
+	}
+
+	// Update the last checked timestamp
+	now := time.Now()
+	device.LastChecked = &now
+
+	// Only update the device in the database if it has an ID (i.e., it's already persisted)
+	if device.ID != "" {
+		if err := m.UpdateDevice(device); err != nil {
+			return &DeviceError{
+				Type:    ErrorTypeDatabase,
+				Message: fmt.Sprintf("failed to update device status: %v", err),
+			}
+		}
+	}
+
+	// Return error if connectivity test found issues
+	if result.Error != nil {
+		return &DeviceError{
+			Type:    "connectivity",
+			Message: result.Error.Error(),
+		}
+	}
+
 	return nil
 }
