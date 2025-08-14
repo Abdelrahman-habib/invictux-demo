@@ -97,12 +97,13 @@ func GetMigrations() []Migration {
 
 // RunMigrations executes all pending migrations
 func RunMigrations(db *sql.DB) error {
-	// First, ensure the migrations table exists
 	migrations := GetMigrations()
 
-	// Create the migrations table first
+	// First, ensure the migrations table exists
+	var migrationTableMigration Migration
 	for _, migration := range migrations {
 		if migration.Name == "create_schema_migrations_table" {
+			migrationTableMigration = migration
 			if _, err := db.Exec(migration.SQL); err != nil {
 				return fmt.Errorf("failed to create migrations table: %w", err)
 			}
@@ -116,10 +117,19 @@ func RunMigrations(db *sql.DB) error {
 		return fmt.Errorf("failed to get applied migrations: %w", err)
 	}
 
+	// Record the schema_migrations table creation if not already recorded
+	if !contains(appliedMigrations, migrationTableMigration.Version) {
+		if _, err := db.Exec("INSERT INTO schema_migrations (version, name) VALUES (?, ?)",
+			migrationTableMigration.Version, migrationTableMigration.Name); err != nil {
+			return fmt.Errorf("failed to record migrations table creation: %w", err)
+		}
+		appliedMigrations = append(appliedMigrations, migrationTableMigration.Version)
+	}
+
 	// Run pending migrations
 	for _, migration := range migrations {
 		if migration.Name == "create_schema_migrations_table" {
-			continue // Already applied above
+			continue // Already handled above
 		}
 
 		if !contains(appliedMigrations, migration.Version) {

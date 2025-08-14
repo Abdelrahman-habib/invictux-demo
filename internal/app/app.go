@@ -3,19 +3,23 @@ package app
 import (
 	"context"
 	"log"
+	"time"
 
 	"qwin/internal/checker"
 	"qwin/internal/database"
 	"qwin/internal/device"
+	"qwin/internal/security"
 )
 
 // App struct represents the main application
 type App struct {
-	ctx           context.Context
-	db            *database.DB
-	deviceManager *device.Manager
-	checkEngine   *checker.Engine
-	scanner       *device.Scanner
+	ctx               context.Context
+	db                *database.DB
+	deviceManager     *device.Manager
+	checkEngine       *checker.Engine
+	scanner           *device.Scanner
+	encryptionManager *security.EncryptionManager
+	sessionManager    *security.SessionManager
 }
 
 // NewApp creates a new App application struct
@@ -45,6 +49,11 @@ func (a *App) Startup(ctx context.Context) {
 		log.Printf("Failed to run migrations: %v", err)
 		return
 	}
+
+	// Initialize security components
+	// TODO: In production, this should be configurable or derived from user input
+	a.encryptionManager = security.NewEncryptionManager("default-app-key-change-in-production")
+	a.sessionManager = security.NewSessionManager(30 * time.Minute) // 30 minute session timeout
 
 	// Initialize components
 	a.deviceManager = device.NewManager(a.db.DB)
@@ -155,4 +164,81 @@ func (a *App) RunBulkSecurityChecks() (map[string][]checker.CheckResult, error) 
 	}
 
 	return a.checkEngine.RunBulkChecks(devices)
+}
+
+// Security and Settings Methods
+
+// EncryptPassword encrypts a password for secure storage
+func (a *App) EncryptPassword(password string) ([]byte, error) {
+	if a.encryptionManager == nil {
+		return nil, nil
+	}
+	return a.encryptionManager.Encrypt(password)
+}
+
+// DecryptPassword decrypts a stored password
+func (a *App) DecryptPassword(encryptedPassword []byte) (string, error) {
+	if a.encryptionManager == nil {
+		return "", nil
+	}
+	return a.encryptionManager.Decrypt(encryptedPassword)
+}
+
+// CreateSession creates a new user session
+func (a *App) CreateSession(userID string) (*security.Session, error) {
+	if a.sessionManager == nil {
+		return nil, nil
+	}
+	return a.sessionManager.CreateSession(userID)
+}
+
+// ValidateSession validates an existing session
+func (a *App) ValidateSession(sessionID string) (*security.Session, error) {
+	if a.sessionManager == nil {
+		return nil, nil
+	}
+	return a.sessionManager.ValidateSession(sessionID)
+}
+
+// DestroySession destroys a user session
+func (a *App) DestroySession(sessionID string) {
+	if a.sessionManager != nil {
+		a.sessionManager.DestroySession(sessionID)
+	}
+}
+
+// GetDatabaseStats returns database statistics
+func (a *App) GetDatabaseStats() map[string]interface{} {
+	if a.db == nil {
+		return make(map[string]interface{})
+	}
+
+	stats := a.db.GetStats()
+	return map[string]interface{}{
+		"maxOpenConnections": stats.MaxOpenConnections,
+		"openConnections":    stats.OpenConnections,
+		"inUse":              stats.InUse,
+		"idle":               stats.Idle,
+		"waitCount":          stats.WaitCount,
+		"waitDuration":       stats.WaitDuration.String(),
+		"maxIdleClosed":      stats.MaxIdleClosed,
+		"maxIdleTimeClosed":  stats.MaxIdleTimeClosed,
+		"maxLifetimeClosed":  stats.MaxLifetimeClosed,
+	}
+}
+
+// PerformDatabaseHealthCheck performs a database health check
+func (a *App) PerformDatabaseHealthCheck() error {
+	if a.db == nil {
+		return nil
+	}
+	return a.db.HealthCheck()
+}
+
+// BackupDatabase creates a backup of the database
+func (a *App) BackupDatabase(backupPath string) error {
+	if a.db == nil {
+		return nil
+	}
+	return a.db.Backup(backupPath)
 }
