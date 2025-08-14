@@ -1,17 +1,28 @@
 import React from "react";
-import { X } from "lucide-react";
-import { WindowMinimise, Quit } from "@/../wailsjs/runtime/runtime";
+import { Copy, Square, X } from "lucide-react";
+import {
+  WindowMinimise,
+  Quit,
+  WindowToggleMaximise,
+} from "@/../wailsjs/runtime/runtime";
 import { Button } from "@/components/ui/button";
 import { useTitle } from "@/hooks/use-title";
 
-export function WidgetHeader() {
+export function ApptHeader() {
   const { title } = useTitle();
+  const [isMaximised, setIsMaximised] = React.useState(false);
+
   const handleClose = () => {
     Quit();
   };
 
   const handleMinimize = () => {
     WindowMinimise();
+  };
+
+  const handleToggleMaximise = () => {
+    setIsMaximised((prev) => !prev);
+    WindowToggleMaximise();
   };
 
   return (
@@ -34,6 +45,19 @@ export function WidgetHeader() {
           className="transition-colors"
         >
           <div className="w-3 h-0.5 bg-muted-foreground" />
+        </Button>
+        <Button
+          variant="ghost"
+          onClick={handleToggleMaximise}
+          className="transition-colors"
+        >
+          {isMaximised ? (
+            <Square className="size-3" />
+          ) : (
+            <>
+              <Copy className="size-3 rotate-90" />
+            </>
+          )}
         </Button>
         <Button
           variant="ghost"

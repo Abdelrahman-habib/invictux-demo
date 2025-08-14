@@ -26,19 +26,17 @@ func main() {
 
 	// Create application with options
 	err := wails.Run(&options.App{
-		Title:             "ScreenTime Widget",
-		Width:             320,
-		Height:            200,
-		MinWidth:          280,
-		MinHeight:         180,
-		MaxWidth:          400,
-		MaxHeight:         300,
+		Title:             "Network Configuration Checker",
+		Width:             1200,
+		Height:            800,
+		MinWidth:          1000,
+		MinHeight:         600,
 		DisableResize:     false,
-		Fullscreen:        false,
+		Fullscreen:        true,
 		Frameless:         true,
 		StartHidden:       false,
 		HideWindowOnClose: false,
-		AlwaysOnTop:       true,
+		AlwaysOnTop:       false,
 		BackgroundColour:  &options.RGBA{R: 0, G: 0, B: 0, A: 0},
 		AssetServer: &assetserver.Options{
 			Assets: assets,
@@ -77,7 +75,7 @@ func main() {
 			WebviewIsTransparent: true,
 			WindowIsTranslucent:  true,
 			About: &mac.AboutInfo{
-				Title:   "qwin",
+				Title:   "Network Configuration Checker",
 				Message: "",
 				Icon:    icon,
 			},

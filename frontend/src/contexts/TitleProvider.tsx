@@ -6,7 +6,7 @@ interface TitleProviderProps {
 }
 
 export function TitleProvider({ children }: TitleProviderProps) {
-  const [title, setTitle] = useState("qwin");
+  const [title, setTitle] = useState("Invictux Demo");
 
   return (
     <TitleContext.Provider value={{ title, setTitle }}>

@@ -1,19 +1,41 @@
-import { LearningTracker } from "@/components/learning-tracker";
-import { ScreenTimeWidget } from "@/components/ScreenTimeWidget";
-import { Tab } from "@/types/tabs";
-import { BookCheckIcon, TimerIcon } from "lucide-react";
+import { Monitor, Shield, FileText, Settings, HardDrive } from "lucide-react";
+import { DashboardTab } from "@/components/tabs/DashboardTab";
+import { DevicesTab } from "@/components/tabs/DevicesTab";
+import { SecurityTab } from "@/components/tabs/SecurityTab";
+import { ReportsTab } from "@/components/tabs/ReportsTab";
+import { SettingsTab } from "@/components/tabs/SettingsTab";
 
-export const tabs: Tab[] = [
+export const tabs = [
   {
-    id: "usage",
-    name: "App Usage",
-    icon: TimerIcon,
-    content: ScreenTimeWidget,
+    id: "dashboard",
+    name: "Dashboard",
+    icon: Monitor,
+    content: DashboardTab,
   },
   {
-    id: "learning",
-    name: "Learning",
-    icon: BookCheckIcon,
-    content: LearningTracker,
+    id: "devices",
+    name: "Devices",
+    icon: HardDrive,
+    content: DevicesTab,
   },
-];
+  {
+    id: "security",
+    name: "Security",
+    icon: Shield,
+    content: SecurityTab,
+  },
+  {
+    id: "reports",
+    name: "Reports",
+    icon: FileText,
+    content: ReportsTab,
+  },
+  {
+    id: "settings",
+    name: "Settings",
+    icon: Settings,
+    content: SettingsTab,
+  },
+] as const;
+
+export type TabId = (typeof tabs)[number]["id"];

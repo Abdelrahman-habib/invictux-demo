@@ -1,5 +1,5 @@
 {
-  "name": "qwin",
+  "name": "network-config-checker",
   "private": true,
   "version": "0.0.0",
   "type": "module",
