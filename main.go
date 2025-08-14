@@ -4,7 +4,7 @@ import (
 	"embed"
 	"log"
 
-	"qwin/internal/app"
+	"invictux-demo/internal/app"
 
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/logger"

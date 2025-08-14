@@ -21,13 +21,13 @@ jobs:
       fail-fast: false
       matrix:
         build:
-          - name: 'qwin'
+          - name: 'invictux-demo'
             platform:  'linux/amd64'
             os: 'ubuntu-latest'
-          - name: 'qwin'
+          - name: 'invictux-demo'
             platform:  'windows/amd64'
             os: 'windows-latest'
-          - name: 'qwin'
+          - name: 'invictux-demo'
             platform:  'darwin/universal'
             os: 'macos-latest'
 

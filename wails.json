@@ -1,7 +1,7 @@
 {
   "$schema": "https://wails.io/schemas/config.v2.json",
-  "name": "qwin",
-  "outputfilename": "qwin",
+  "name": "invictux-demo",
+  "outputfilename": "invictux-demo",
   "frontend:install": "pnpm install",
   "frontend:build": "pnpm run build",
   "frontend:dev:build": "echo dev",
@@ -12,8 +12,8 @@
     "email": "55106581+Abdelrahman-habib@users.noreply.github.com"
   },
   "info": {
-    "companyName": "qwin",
-    "productName": "qwin",
+    "companyName": "invictux-demo",
+    "productName": "invictux-demo",
     "productVersion": "1.0.0",
     "copyright": "",
     "comments": "Built using Wails (https://wails.app)"

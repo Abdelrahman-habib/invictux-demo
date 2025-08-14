@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"qwin/internal/device"
+	"invictux-demo/internal/device"
 
 	"golang.org/x/crypto/ssh"
 )

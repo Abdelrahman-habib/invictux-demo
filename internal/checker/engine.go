@@ -2,7 +2,7 @@ package checker
 
 import (
 	"fmt"
-	"qwin/internal/device"
+	"invictux-demo/internal/device"
 )
 
 // Engine handles security check execution

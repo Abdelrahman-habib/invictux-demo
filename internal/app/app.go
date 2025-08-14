@@ -5,10 +5,10 @@ import (
 	"log"
 	"time"
 
-	"qwin/internal/checker"
-	"qwin/internal/database"
-	"qwin/internal/device"
-	"qwin/internal/security"
+	"invictux-demo/internal/checker"
+	"invictux-demo/internal/database"
+	"invictux-demo/internal/device"
+	"invictux-demo/internal/security"
 )
 
 // App struct represents the main application
@@ -17,7 +17,7 @@ type App struct {
 	db                *database.DB
 	deviceManager     *device.Manager
 	checkEngine       *checker.Engine
-	scanner           *device.Scanner
+	scanner           *device.ConnectivityScanner
 	encryptionManager *security.EncryptionManager
 	sessionManager    *security.SessionManager
 }
@@ -58,7 +58,7 @@ func (a *App) Startup(ctx context.Context) {
 	// Initialize components
 	a.deviceManager = device.NewManager(a.db.DB)
 	a.checkEngine = checker.NewEngine()
-	a.scanner = device.NewScanner()
+	a.scanner = device.NewConnectivityScanner()
 
 	log.Println("Network Configuration Checker initialized successfully")
 }
@@ -98,9 +98,11 @@ func (a *App) AddDevice(dev device.Device) error {
 	}
 
 	// Test connectivity before adding
-	if err := a.scanner.TestConnectivity(&dev); err != nil {
+	if result, err := a.scanner.TestConnectivity(&dev); err != nil {
 		log.Printf("Connectivity test failed for device %s: %v", dev.Name, err)
 		// Don't fail the add operation, just log the warning
+	} else if result.Error != nil {
+		log.Printf("Connectivity issues for device %s: %v", dev.Name, result.Error)
 	}
 
 	return a.deviceManager.AddDevice(&dev)
@@ -133,7 +135,14 @@ func (a *App) TestDeviceConnectivity(deviceID string) error {
 		return err
 	}
 
-	return a.scanner.TestConnectivity(dev)
+	result, err := a.scanner.TestConnectivity(dev)
+	if err != nil {
+		return err
+	}
+	if result.Error != nil {
+		return result.Error
+	}
+	return nil
 }
 
 // Security Check Methods
