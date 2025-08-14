@@ -42,7 +42,7 @@ func (s *Scanner) testPing(ipAddress string) error {
 
 // testPort tests if a specific port is accessible
 func (s *Scanner) testPort(ipAddress string, port int) error {
-	address := fmt.Sprintf("%s:%d", ipAddress, port)
+	address := net.JoinHostPort(ipAddress, fmt.Sprintf("%d", port))
 	conn, err := net.DialTimeout("tcp", address, s.timeout)
 	if err != nil {
 		return err

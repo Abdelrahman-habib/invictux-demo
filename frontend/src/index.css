@@ -67,12 +67,17 @@
   src: url("/assets/fonts/SpaceMono-Regular.ttf");
 }
 
+@font-face {
+  font-family: "SF";
+  src: url("/assets/fonts/SF-Pro-Display-Regular.otf");
+}
+
 @layer base {
   * {
     @apply border-border;
   }
   body {
     @apply bg-transparent text-foreground;
-    font-family: SpaceMono, monospace;
+    font-family: SF, SpaceMono, monospace;
   }
 }

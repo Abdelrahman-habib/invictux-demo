@@ -10,7 +10,7 @@ import { useTitle } from "@/hooks/use-title";
 
 export function ApptHeader() {
   const { title } = useTitle();
-  const [isMaximised, setIsMaximised] = React.useState(false);
+  const [isMaximised, setIsMaximised] = React.useState(true);
 
   const handleClose = () => {
     Quit();

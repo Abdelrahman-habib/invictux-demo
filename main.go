@@ -32,7 +32,7 @@ func main() {
 		MinWidth:          1000,
 		MinHeight:         600,
 		DisableResize:     false,
-		Fullscreen:        true,
+		Fullscreen:        false,
 		Frameless:         true,
 		StartHidden:       false,
 		HideWindowOnClose: false,

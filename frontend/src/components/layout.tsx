@@ -6,7 +6,7 @@ export function RootLayout({ children }: { children?: React.ReactNode }) {
     <TitleProvider>
       <div className="w-full h-full bg-transparent rounded-lg border text-foreground overflow-hidden">
         <ApptHeader />
-        {children}
+        <div className="flex w-full h-full">{children}</div>
       </div>
     </TitleProvider>
   );
