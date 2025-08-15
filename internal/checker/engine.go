@@ -15,7 +15,7 @@ import (
 // Engine handles security check execution
 type Engine struct {
 	sshClient   *SSHClient
-	rules       []SecurityRule
+	ruleManager *RuleManager
 	workerCount int
 	timeout     time.Duration
 }
@@ -49,10 +49,10 @@ type BulkCheckResult struct {
 type ProgressCallback func(progress *CheckProgress)
 
 // NewEngine creates a new security check engine
-func NewEngine() *Engine {
+func NewEngine(ruleManager *RuleManager) *Engine {
 	return &Engine{
 		sshClient:   NewSSHClient(),
-		rules:       []SecurityRule{},
+		ruleManager: ruleManager,
 		workerCount: 5, // Default worker pool size
 		timeout:     30 * time.Second,
 	}
@@ -403,18 +403,40 @@ func (e *Engine) runChecksForJob(job CheckJob, mu *sync.Mutex,
 
 // GetSecurityRules returns security rules for a specific vendor
 func (e *Engine) GetSecurityRules(vendorType string) []SecurityRule {
-	var filteredRules []SecurityRule
-	for _, rule := range e.rules {
-		if rule.Vendor == vendorType || rule.Vendor == "generic" {
-			filteredRules = append(filteredRules, rule)
+	if e.ruleManager == nil {
+		return []SecurityRule{}
+	}
+
+	rules, err := e.ruleManager.GetRulesByVendor(vendorType)
+	if err != nil {
+		// Log error and return empty slice
+		return []SecurityRule{}
+	}
+
+	// Filter only enabled rules
+	var enabledRules []SecurityRule
+	for _, rule := range rules {
+		if rule.Enabled {
+			enabledRules = append(enabledRules, rule)
 		}
 	}
-	return filteredRules
+
+	return enabledRules
 }
 
-// LoadRules loads security rules from database
-func (e *Engine) LoadRules(rules []SecurityRule) {
-	e.rules = rules
+// LoadCustomRules loads custom security rules into the database
+func (e *Engine) LoadCustomRules(rules []SecurityRule) error {
+	if e.ruleManager == nil {
+		return fmt.Errorf("rule manager not initialized")
+	}
+
+	for _, rule := range rules {
+		if err := e.ruleManager.CreateRule(rule); err != nil {
+			return fmt.Errorf("failed to create rule %s: %w", rule.Name, err)
+		}
+	}
+
+	return nil
 }
 
 // GetProgress returns the current progress for all devices

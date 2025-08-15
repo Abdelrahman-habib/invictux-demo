@@ -2,12 +2,14 @@ package checker
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"testing"
 	"time"
 
 	"invictux-demo/internal/device"
 
+	_ "github.com/mattn/go-sqlite3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
@@ -48,20 +50,28 @@ func (m *MockSession) Close() error {
 	return args.Error(0)
 }
 
+// setupTestRuleManager creates a test rule manager with in-memory database
+func setupTestRuleManager(t *testing.T) *RuleManager {
+	db := setupTestDB(t)
+	return NewRuleManager(db)
+}
+
 // TestEngine_NewEngine tests the creation of a new engine
 func TestEngine_NewEngine(t *testing.T) {
-	engine := NewEngine()
+	rm := setupTestRuleManager(t)
+	engine := NewEngine(rm)
 
 	assert.NotNil(t, engine)
 	assert.NotNil(t, engine.sshClient)
+	assert.NotNil(t, engine.ruleManager)
 	assert.Equal(t, 5, engine.workerCount)
 	assert.Equal(t, 30*time.Second, engine.timeout)
-	assert.Empty(t, engine.rules)
 }
 
 // TestEngine_SetWorkerCount tests setting worker count
 func TestEngine_SetWorkerCount(t *testing.T) {
-	engine := NewEngine()
+	rm := setupTestRuleManager(t)
+	engine := NewEngine(rm)
 
 	// Test valid worker count
 	engine.SetWorkerCount(10)
@@ -77,16 +87,18 @@ func TestEngine_SetWorkerCount(t *testing.T) {
 
 // TestEngine_SetTimeout tests setting timeout
 func TestEngine_SetTimeout(t *testing.T) {
-	engine := NewEngine()
+	rm := setupTestRuleManager(t)
+	engine := NewEngine(rm)
 
 	timeout := 60 * time.Second
 	engine.SetTimeout(timeout)
 	assert.Equal(t, timeout, engine.timeout)
 }
 
-// TestEngine_LoadRules tests loading security rules
-func TestEngine_LoadRules(t *testing.T) {
-	engine := NewEngine()
+// TestEngine_LoadCustomRules tests loading custom security rules
+func TestEngine_LoadCustomRules(t *testing.T) {
+	rm := setupTestRuleManager(t)
+	engine := NewEngine(rm)
 
 	rules := []SecurityRule{
 		{
@@ -109,58 +121,85 @@ func TestEngine_LoadRules(t *testing.T) {
 		},
 	}
 
-	engine.LoadRules(rules)
-	assert.Equal(t, rules, engine.rules)
+	err := engine.LoadCustomRules(rules)
+	assert.NoError(t, err)
+
+	// Verify rules were loaded into the database
+	allRules, err := rm.GetAllRules()
+	assert.NoError(t, err)
+	assert.Len(t, allRules, 2)
 }
 
 // TestEngine_GetSecurityRules tests filtering security rules by vendor
 func TestEngine_GetSecurityRules(t *testing.T) {
-	engine := NewEngine()
+	rm := setupTestRuleManager(t)
+	engine := NewEngine(rm)
 
 	rules := []SecurityRule{
 		{
-			ID:      "rule1",
-			Name:    "Cisco Rule",
-			Vendor:  "cisco",
-			Enabled: true,
+			ID:              "rule1",
+			Name:            "Cisco Rule",
+			Vendor:          "cisco",
+			Command:         "show version",
+			ExpectedPattern: "IOS",
+			Severity:        string(SeverityHigh),
+			Enabled:         true,
 		},
 		{
-			ID:      "rule2",
-			Name:    "Generic Rule",
-			Vendor:  "generic",
-			Enabled: true,
+			ID:              "rule2",
+			Name:            "Generic Rule",
+			Vendor:          "generic",
+			Command:         "show config",
+			ExpectedPattern: "security",
+			Severity:        string(SeverityMedium),
+			Enabled:         true,
 		},
 		{
-			ID:      "rule3",
-			Name:    "Juniper Rule",
-			Vendor:  "juniper",
-			Enabled: true,
+			ID:              "rule3",
+			Name:            "Juniper Rule",
+			Vendor:          "juniper",
+			Command:         "show version",
+			ExpectedPattern: "JUNOS",
+			Severity:        string(SeverityHigh),
+			Enabled:         true,
 		},
 	}
 
-	engine.LoadRules(rules)
+	// Load rules into database
+	err := engine.LoadCustomRules(rules)
+	assert.NoError(t, err)
 
 	// Test Cisco vendor (should get Cisco + generic rules)
 	ciscoRules := engine.GetSecurityRules("cisco")
 	assert.Len(t, ciscoRules, 2)
-	assert.Equal(t, "rule1", ciscoRules[0].ID)
-	assert.Equal(t, "rule2", ciscoRules[1].ID)
+
+	// Find the rules by name since order might vary
+	var foundCisco, foundGeneric bool
+	for _, rule := range ciscoRules {
+		if rule.Name == "Cisco Rule" {
+			foundCisco = true
+		}
+		if rule.Name == "Generic Rule" {
+			foundGeneric = true
+		}
+	}
+	assert.True(t, foundCisco)
+	assert.True(t, foundGeneric)
 
 	// Test Juniper vendor (should get Juniper + generic rules)
 	juniperRules := engine.GetSecurityRules("juniper")
 	assert.Len(t, juniperRules, 2)
-	assert.Equal(t, "rule2", juniperRules[0].ID)
-	assert.Equal(t, "rule3", juniperRules[1].ID)
 
 	// Test unknown vendor (should get only generic rules)
 	unknownRules := engine.GetSecurityRules("unknown")
 	assert.Len(t, unknownRules, 1)
-	assert.Equal(t, "rule2", unknownRules[0].ID)
+	assert.Equal(t, "Generic Rule", unknownRules[0].Name)
 }
 
 // TestEngine_evaluateRuleResult tests rule result evaluation
 func TestEngine_evaluateRuleResult(t *testing.T) {
-	engine := NewEngine()
+	rm := setupTestRuleManager(t)
+	engine := NewEngine(rm)
 
 	tests := []struct {
 		name           string
@@ -254,8 +293,12 @@ func TestEngine_RunChecks(t *testing.T) {
 	}
 
 	t.Run("Successful checks", func(t *testing.T) {
-		engine := NewEngine()
-		engine.LoadRules(rules)
+		rm := setupTestRuleManager(t)
+		engine := NewEngine(rm)
+
+		// Load rules into database
+		err := engine.LoadCustomRules(rules)
+		assert.NoError(t, err)
 
 		// This test would require mocking the SSH client
 		// For now, test that it returns an error when no rules are found
@@ -267,8 +310,12 @@ func TestEngine_RunChecks(t *testing.T) {
 	})
 
 	t.Run("No rules for vendor", func(t *testing.T) {
-		engine := NewEngine()
-		engine.LoadRules(rules)
+		rm := setupTestRuleManager(t)
+		engine := NewEngine(rm)
+
+		// Load rules into database
+		err := engine.LoadCustomRules(rules)
+		assert.NoError(t, err)
 
 		testDevice.Vendor = "nonexistent"
 		results, err := engine.RunChecks(testDevice)
@@ -280,15 +327,19 @@ func TestEngine_RunChecks(t *testing.T) {
 
 // TestEngine_RunBulkChecks tests running security checks on multiple devices
 func TestEngine_RunBulkChecks(t *testing.T) {
-	engine := NewEngine()
-
 	t.Run("Empty device list", func(t *testing.T) {
+		rm := setupTestRuleManager(t)
+		engine := NewEngine(rm)
+
 		results, err := engine.RunBulkChecks([]device.Device{})
 		assert.NoError(t, err)
 		assert.Empty(t, results)
 	})
 
 	t.Run("Multiple devices", func(t *testing.T) {
+		rm := setupTestRuleManager(t)
+		engine := NewEngine(rm)
+
 		devices := []device.Device{
 			{
 				ID:        "device1",
@@ -320,7 +371,8 @@ func TestEngine_RunBulkChecks(t *testing.T) {
 				Enabled:         true,
 			},
 		}
-		engine.LoadRules(rules)
+		err := engine.LoadCustomRules(rules)
+		assert.NoError(t, err)
 
 		// This would normally connect to devices, but since we can't mock SSH easily here,
 		// we'll test the structure
@@ -332,7 +384,8 @@ func TestEngine_RunBulkChecks(t *testing.T) {
 
 // TestEngine_RunChecksWithProgress tests progress reporting
 func TestEngine_RunChecksWithProgress(t *testing.T) {
-	engine := NewEngine()
+	rm := setupTestRuleManager(t)
+	engine := NewEngine(rm)
 
 	// Create test device
 	testDevice := &device.Device{
@@ -356,7 +409,8 @@ func TestEngine_RunChecksWithProgress(t *testing.T) {
 			Enabled:         true,
 		},
 	}
-	engine.LoadRules(rules)
+	err := engine.LoadCustomRules(rules)
+	assert.NoError(t, err)
 
 	// Track progress updates
 	var progressUpdates []*CheckProgress
@@ -368,7 +422,7 @@ func TestEngine_RunChecksWithProgress(t *testing.T) {
 
 	// This test would require mocking SSH, so we'll test the no-rules case
 	testDevice.Vendor = "unknown"
-	_, err := engine.RunChecksWithProgress(testDevice, progressCallback)
+	_, err = engine.RunChecksWithProgress(testDevice, progressCallback)
 	assert.Error(t, err)
 
 	// Should have received at least one progress update
@@ -377,7 +431,8 @@ func TestEngine_RunChecksWithProgress(t *testing.T) {
 
 // TestEngine_worker tests the worker function
 func TestEngine_worker(t *testing.T) {
-	engine := NewEngine()
+	rm := setupTestRuleManager(t)
+	engine := NewEngine(rm)
 
 	// Create test job
 	testDevice := &device.Device{
@@ -516,11 +571,37 @@ func TestBulkCheckResult(t *testing.T) {
 
 // Benchmark tests for performance
 func BenchmarkEngine_GetSecurityRules(b *testing.B) {
-	engine := NewEngine()
+	// Create test database
+	db, err := sql.Open("sqlite3", ":memory:")
+	if err != nil {
+		b.Fatalf("Failed to open test database: %v", err)
+	}
+	defer db.Close()
+
+	// Create table
+	createTableSQL := `
+		CREATE TABLE security_rules (
+			id TEXT PRIMARY KEY,
+			name TEXT NOT NULL,
+			description TEXT,
+			vendor TEXT NOT NULL,
+			command TEXT NOT NULL,
+			expected_pattern TEXT,
+			severity TEXT NOT NULL,
+			enabled BOOLEAN DEFAULT TRUE,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		);
+	`
+	if _, err := db.Exec(createTableSQL); err != nil {
+		b.Fatalf("Failed to create test table: %v", err)
+	}
+
+	rm := NewRuleManager(db)
+	engine := NewEngine(rm)
 
 	// Create a large number of rules
 	rules := make([]SecurityRule, 1000)
-	for i := 0; i < 1000; i++ {
+	for i := range 1000 {
 		var vendor string
 		switch i % 3 {
 		case 0:
@@ -532,14 +613,21 @@ func BenchmarkEngine_GetSecurityRules(b *testing.B) {
 		}
 
 		rules[i] = SecurityRule{
-			ID:      fmt.Sprintf("rule%d", i),
-			Name:    fmt.Sprintf("Rule %d", i),
-			Vendor:  vendor,
-			Enabled: true,
+			ID:              fmt.Sprintf("rule%d", i),
+			Name:            fmt.Sprintf("Rule %d", i),
+			Vendor:          vendor,
+			Command:         "show version",
+			ExpectedPattern: ".*",
+			Severity:        string(SeverityLow),
+			Enabled:         true,
 		}
 	}
 
-	engine.LoadRules(rules)
+	// Load rules into database
+	err = engine.LoadCustomRules(rules)
+	if err != nil {
+		b.Fatalf("Failed to load rules: %v", err)
+	}
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -548,7 +636,33 @@ func BenchmarkEngine_GetSecurityRules(b *testing.B) {
 }
 
 func BenchmarkEngine_evaluateRuleResult(b *testing.B) {
-	engine := NewEngine()
+	// Create test database
+	db, err := sql.Open("sqlite3", ":memory:")
+	if err != nil {
+		b.Fatalf("Failed to open test database: %v", err)
+	}
+	defer db.Close()
+
+	// Create table
+	createTableSQL := `
+		CREATE TABLE security_rules (
+			id TEXT PRIMARY KEY,
+			name TEXT NOT NULL,
+			description TEXT,
+			vendor TEXT NOT NULL,
+			command TEXT NOT NULL,
+			expected_pattern TEXT,
+			severity TEXT NOT NULL,
+			enabled BOOLEAN DEFAULT TRUE,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		);
+	`
+	if _, err := db.Exec(createTableSQL); err != nil {
+		b.Fatalf("Failed to create test table: %v", err)
+	}
+
+	rm := NewRuleManager(db)
+	engine := NewEngine(rm)
 
 	output := "Cisco IOS Software, C2960X-STACK Software (C2960X-UNIVERSALK9-M), Version 15.2(4)E10"
 	rule := SecurityRule{

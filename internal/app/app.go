@@ -57,7 +57,15 @@ func (a *App) Startup(ctx context.Context) {
 
 	// Initialize components
 	a.deviceManager = device.NewManager(a.db.DB)
-	a.checkEngine = checker.NewEngine()
+
+	// Initialize rule manager and load predefined rules
+	ruleManager := checker.NewRuleManager(a.db.DB)
+	if err := ruleManager.LoadPredefinedRules(); err != nil {
+		log.Printf("Failed to load predefined rules: %v", err)
+		// Continue anyway, rules can be loaded later
+	}
+
+	a.checkEngine = checker.NewEngine(ruleManager)
 	a.scanner = device.NewConnectivityScanner()
 
 	log.Println("Network Configuration Checker initialized successfully")
