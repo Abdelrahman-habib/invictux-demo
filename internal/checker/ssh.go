@@ -3,6 +3,7 @@ package checker
 import (
 	"fmt"
 	"time"
+	"io/ioutil"
 
 	"invictux-demo/internal/device"
 
@@ -26,12 +27,21 @@ func NewSSHClient() *SSHClient {
 // Connect establishes an SSH connection to a device
 func (c *SSHClient) Connect(device *device.Device) (*ssh.Session, error) {
 	// TODO: Implement proper credential decryption
+	// Load allowed host public key
+	publicKeyBytes, err := ioutil.ReadFile("allowed_hostkey.pub")
+	if err != nil {
+		return nil, fmt.Errorf("failed to read allowed host key: %w", err)
+	}
+	publicKey, err := ssh.ParsePublicKey(publicKeyBytes)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse allowed host key: %w", err)
+	}
 	config := &ssh.ClientConfig{
 		User: device.Username,
 		Auth: []ssh.AuthMethod{
 			ssh.Password("placeholder"), // Will decrypt device.PasswordEncrypted
 		},
-		HostKeyCallback: ssh.InsecureIgnoreHostKey(), // For demo - use proper verification in production
+		HostKeyCallback: ssh.FixedHostKey(publicKey),
 		Timeout:         c.timeout,
 	}
 
