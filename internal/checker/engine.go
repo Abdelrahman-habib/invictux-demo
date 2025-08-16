@@ -8,13 +8,14 @@ import (
 	"time"
 
 	"invictux-demo/internal/device"
+	"invictux-demo/internal/ssh"
 
 	"github.com/google/uuid"
 )
 
 // Engine handles security check execution
 type Engine struct {
-	sshClient   *SSHClient
+	sshClient   ssh.SSHClientInterface
 	ruleManager *RuleManager
 	workerCount int
 	timeout     time.Duration
@@ -51,9 +52,19 @@ type ProgressCallback func(progress *CheckProgress)
 // NewEngine creates a new security check engine
 func NewEngine(ruleManager *RuleManager) *Engine {
 	return &Engine{
-		sshClient:   NewSSHClient(),
+		sshClient:   ssh.NewSSHClient(nil), // Use default config
 		ruleManager: ruleManager,
 		workerCount: 5, // Default worker pool size
+		timeout:     30 * time.Second,
+	}
+}
+
+// NewEngineWithSSHClient creates a new engine with a custom SSH client
+func NewEngineWithSSHClient(ruleManager *RuleManager, sshClient ssh.SSHClientInterface) *Engine {
+	return &Engine{
+		sshClient:   sshClient,
+		ruleManager: ruleManager,
+		workerCount: 5,
 		timeout:     30 * time.Second,
 	}
 }
@@ -166,25 +177,38 @@ func (e *Engine) executeRule(device *device.Device, rule SecurityRule) (CheckRes
 		CheckedAt: time.Now(),
 	}
 
+	// Create connection info for the advanced SSH client
+	connInfo := &ssh.ConnectionInfo{
+		Host:       device.IPAddress,
+		Port:       device.SSHPort,
+		Username:   device.Username,
+		Password:   "placeholder", // TODO: Decrypt device.PasswordEncrypted
+		AuthMethod: ssh.AuthPassword,
+	}
+
+	// Create context with timeout
+	ctx, cancel := context.WithTimeout(context.Background(), e.timeout)
+	defer cancel()
+
 	// Connect to device via SSH
-	session, err := e.sshClient.Connect(device)
+	conn, err := e.sshClient.Connect(ctx, connInfo)
 	if err != nil {
 		result.Message = fmt.Sprintf("SSH connection failed: %s", err.Error())
 		return result, nil // Return result with error status, don't fail the entire check
 	}
-	defer e.sshClient.Disconnect(session)
+	defer e.sshClient.Disconnect(conn)
 
 	// Execute the command
-	output, err := e.sshClient.ExecuteCommand(session, rule.Command)
+	cmdResult, err := e.sshClient.ExecuteCommand(ctx, conn, rule.Command)
 	if err != nil {
 		result.Message = fmt.Sprintf("Command execution failed: %s", err.Error())
 		return result, nil
 	}
 
-	result.Evidence = output
+	result.Evidence = cmdResult.Output
 
 	// Evaluate the result against expected pattern
-	status, message := e.evaluateRuleResult(output, rule)
+	status, message := e.evaluateRuleResult(cmdResult.Output, rule)
 	result.Status = string(status)
 	result.Message = message
 

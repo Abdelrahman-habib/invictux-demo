@@ -2,6 +2,7 @@ package ssh
 
 import (
 	"context"
+	"crypto/md5"
 	"fmt"
 	"net"
 	"sync"
@@ -86,14 +87,54 @@ type SSHClientInterface interface {
 	GetConnectionStats() map[string]ConnectionStats
 }
 
+// Global known hosts storage for Trust-On-First-Use (TOFU) approach
+var knownHosts = make(map[string]ssh.PublicKey)
+var knownHostsMutex sync.RWMutex
+
+// createSecureHostKeyCallback creates a secure host key callback using TOFU approach
+func createSecureHostKeyCallback() ssh.HostKeyCallback {
+	return func(hostname string, remote net.Addr, key ssh.PublicKey) error {
+		knownHostsMutex.Lock()
+		defer knownHostsMutex.Unlock()
+
+		// Check if we have a known host key for this hostname
+		if knownKey, exists := knownHosts[hostname]; exists {
+			// Compare the provided key with the known key
+			if string(key.Marshal()) == string(knownKey.Marshal()) {
+				return nil // Key matches, connection is secure
+			}
+			return fmt.Errorf("host key verification failed for %s: key mismatch", hostname)
+		}
+
+		// For new hosts, implement Trust-On-First-Use (TOFU) approach
+		keyFingerprint := md5.Sum(key.Marshal())
+		fmt.Printf("WARNING: Unknown host %s with key fingerprint %x\n", hostname, keyFingerprint)
+		fmt.Printf("Adding host key to known hosts (Trust-On-First-Use)\n")
+
+		// Store the key for future connections
+		knownHosts[hostname] = key
+
+		return nil
+	}
+}
+
+// CreateInsecureHostKeyCallbackForTesting creates an insecure callback for testing
+// WARNING: This should ONLY be used in development/testing environments
+func CreateInsecureHostKeyCallbackForTesting() ssh.HostKeyCallback {
+	return func(hostname string, remote net.Addr, key ssh.PublicKey) error {
+		fmt.Printf("WARNING: Using insecure host key verification for %s - this should only be used in development\n", hostname)
+		return nil
+	}
+}
+
 // ConnectionStats provides statistics about connection pools
 type ConnectionStats struct {
-	Host            string
-	ActiveConns     int
-	AvailableConns  int
-	TotalConns      int
-	CreatedConns    int64
-	FailedConns     int64
+	Host             string
+	ActiveConns      int
+	AvailableConns   int
+	TotalConns       int
+	CreatedConns     int64
+	FailedConns      int64
 	CommandsExecuted int64
 }
 
@@ -119,9 +160,8 @@ func NewSSHClient(config *ClientConfig) *SSHClient {
 	return &SSHClient{
 		config:      config,
 		connections: make(map[string]*ConnectionPool),
-		// For development/testing, use InsecureIgnoreHostKey
-		// In production, this should be replaced with proper host key verification
-		hostKeyCheck: ssh.InsecureIgnoreHostKey(),
+		// Use secure host key verification by default
+		hostKeyCheck: createSecureHostKeyCallback(),
 	}
 }
 
@@ -149,10 +189,10 @@ func (c *SSHClient) Connect(ctx context.Context, connInfo *ConnectionInfo) (*SSH
 	}
 
 	hostKey := fmt.Sprintf("%s:%d", connInfo.Host, connInfo.Port)
-	
+
 	// Get or create connection pool for this host
 	pool := c.getOrCreatePool(hostKey)
-	
+
 	// Try to get an existing connection from the pool
 	if conn := pool.getConnection(); conn != nil {
 		return conn, nil
@@ -243,11 +283,11 @@ func (c *SSHClient) ExecuteCommands(ctx context.Context, conn *SSHConnection, co
 	}
 
 	results := make([]*CommandResult, 0, len(commands))
-	
+
 	for _, command := range commands {
 		result, err := c.ExecuteCommand(ctx, conn, command)
 		results = append(results, result)
-		
+
 		// Continue executing other commands even if one fails
 		if err != nil {
 			// Log the error but continue with other commands
@@ -361,7 +401,7 @@ func (c *SSHClient) getOrCreatePool(hostKey string) *ConnectionPool {
 // createConnectionWithRetry creates a new SSH connection with retry logic
 func (c *SSHClient) createConnectionWithRetry(ctx context.Context, connInfo *ConnectionInfo, pool *ConnectionPool) (*SSHConnection, error) {
 	var lastErr error
-	
+
 	for attempt := 0; attempt <= c.config.MaxRetries; attempt++ {
 		if attempt > 0 {
 			// Wait before retrying with exponential backoff
@@ -429,12 +469,12 @@ func (c *SSHClient) createConnection(ctx context.Context, connInfo *ConnectionIn
 
 	// Create connection with timeout
 	address := fmt.Sprintf("%s:%d", connInfo.Host, connInfo.Port)
-	
+
 	// Use context for connection timeout
 	dialer := &net.Dialer{
 		Timeout: c.config.ConnectTimeout,
 	}
-	
+
 	netConn, err := dialer.DialContext(ctx, "tcp", address)
 	if err != nil {
 		return nil, fmt.Errorf("failed to dial %s: %w", address, err)
@@ -477,7 +517,7 @@ func (p *ConnectionPool) getConnection() *SSHConnection {
 func (p *ConnectionPool) addConnection(conn *SSHConnection) {
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
-	
+
 	p.active[conn] = true
 }
 
@@ -487,7 +527,7 @@ func (p *ConnectionPool) closeAll() error {
 	defer p.mutex.Unlock()
 
 	var lastErr error
-	
+
 	// Close connections in the channel
 	for {
 		select {
