@@ -20,11 +20,14 @@ type App struct {
 	scanner           *device.ConnectivityScanner
 	encryptionManager *security.EncryptionManager
 	sessionManager    *security.SessionManager
+	environment       string
 }
 
 // NewApp creates a new App application struct
-func NewApp() *App {
-	return &App{}
+func NewApp(env string) *App {
+	return &App{
+		environment: env,
+	}
 }
 
 // Startup is called at application startup
@@ -52,7 +55,12 @@ func (a *App) Startup(ctx context.Context) {
 
 	// Initialize security components
 	// TODO: In production, this should be configurable or derived from user input
-	a.encryptionManager = security.NewEncryptionManager("default-app-key-change-in-production")
+	encryptionKey := "default-app-key-change-in-production"
+	if a.environment == "staging" {
+		log.Println("Using staging encryption key.")
+		encryptionKey = "staging-app-key-for-testing-only"
+	}
+	a.encryptionManager = security.NewEncryptionManager(encryptionKey)
 	a.sessionManager = security.NewSessionManager(30 * time.Minute) // 30 minute session timeout
 
 	// Initialize components
@@ -68,7 +76,7 @@ func (a *App) Startup(ctx context.Context) {
 	a.checkEngine = checker.NewEngine(ruleManager)
 	a.scanner = device.NewConnectivityScanner()
 
-	log.Println("Network Configuration Checker initialized successfully")
+	log.Printf("Network Configuration Checker initialized successfully in %s mode\n", a.environment)
 }
 
 // GetEnvironment returns the current application environment (production, staging, etc.)

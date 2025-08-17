@@ -20,6 +20,9 @@ var assets embed.FS
 //go:embed assets/appicon.png
 var icon []byte
 
+// // AppEnvironment is set at build time through ldflags
+var AppEnvironment string
+
 func main() {
 	// Set default environment if not provided by ldflags (e.g., for 'wails dev')
 	if AppEnvironment == "" {
