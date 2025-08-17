@@ -60,6 +60,7 @@ jobs:
           package: false
           go-version: "1.23"
           node-version: "18"
+          ldflags: "-X main.AppEnvironment=staging"
 
       # Security checks (Windows only for now since app is Windows-specific)
       - name: Run Go tests with race detection

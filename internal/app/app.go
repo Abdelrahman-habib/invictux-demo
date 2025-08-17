@@ -71,6 +71,11 @@ func (a *App) Startup(ctx context.Context) {
 	log.Println("Network Configuration Checker initialized successfully")
 }
 
+// GetEnvironment returns the current application environment (production, staging, etc.)
+func (a *App) GetEnvironment() string {
+	return a.environment
+}
+
 // DomReady is called after front-end resources have been loaded
 func (a *App) DomReady(ctx context.Context) {
 	// Add your action here

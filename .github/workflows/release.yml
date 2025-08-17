@@ -1,0 +1,70 @@
+name: "Release Build (Production)"
+
+on:
+  push:
+    tags:
+      - "v*.*.*" # e.g. v1.0.0, v1.2.3
+
+env:
+  NODE_OPTIONS: "--max-old-space-size=4096"
+
+jobs:
+  build:
+    permissions:
+      contents: write # Needed to create releases
+    strategy:
+      fail-fast: false
+      matrix:
+        build:
+          - name: "invictux-demo"
+            platform: "windows/amd64"
+            os: "windows-latest"
+          # Future cross-platform support
+          # - name: 'invictux-demo'
+          #   platform: 'linux/amd64'
+          #   os: 'ubuntu-latest'
+          # - name: 'invictux-demo'
+          #   platform: 'darwin/universal'
+          #   os: 'macos-latest'
+
+    runs-on: ${{ matrix.build.os }}
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          submodules: recursive
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.10.0
+
+      - name: Build Wails app
+        uses: dAppServer/wails-build-action@main
+        id: build
+        with:
+          build-name: ${{ matrix.build.name }}
+          build-platform: ${{ matrix.build.platform }}
+          package: false # We will package in a later step if needed
+          go-version: "1.23"
+          node-version: "18"
+          ldflags: "-X main.AppEnvironment=production"
+
+      # TODO: Add steps here to sign the code, package it into an installer, etc.
+
+      - name: Set artifact platform name
+        id: platform
+        run: |
+          $platform = "${{ matrix.build.platform }}" -replace "/", "-"
+          echo "name=$platform" >> $env:GITHUB_OUTPUT
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.build.name }}-${{ steps.platform.outputs.name }}-${{ github.ref_name }}
+          path: |
+            build/bin/*
+            !build/bin/*.syso
+          retention-days: 90
