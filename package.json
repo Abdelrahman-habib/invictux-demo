@@ -1,0 +1,15 @@
+{
+  "name": "invictux-demo-root",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Root task runner for the Invictux-Demo Wails project",
+  "scripts": {
+    "dev": "wails dev",
+    "build": "wails build",
+    "lint": "cd frontend && pnpm lint",
+    "test": "pnpm test:go && pnpm test:frontend",
+    "test:go": "go test -race -v ./...",
+    "test:frontend": "cd frontend && pnpm test"
+  },
+  "author": "Abdelrahman-habib"
+}
