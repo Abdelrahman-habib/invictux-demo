@@ -1,12 +1,12 @@
-name: "Build and Test"
+name: "Build and Test (Staging)"
 
 on:
   push:
-    branches: ["main"]
+    branches: ["develop"]
     tags:
       - "*"
   pull_request:
-    branches: ["main"]
+    branches: ["develop"]
 
 env:
   # Necessary for most environments as build failure can occur due to OOM issues
@@ -60,6 +60,7 @@ jobs:
           package: false
           go-version: "1.23"
           node-version: "18"
+          ldflags: "-X main.AppEnvironment=staging"
 
       # Security checks (Windows only for now since app is Windows-specific)
       - name: Run Go tests with race detection
@@ -78,8 +79,6 @@ jobs:
         run: |
           go install golang.org/x/vuln/cmd/govulncheck@latest
           govulncheck ./...
-
-      
 
       # Set platform name for artifact (replace / with -)
       - name: Set artifact platform name

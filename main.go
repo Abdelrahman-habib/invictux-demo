@@ -20,9 +20,18 @@ var assets embed.FS
 //go:embed assets/appicon.png
 var icon []byte
 
+// // AppEnvironment is set at build time through ldflags
+var AppEnvironment string
+
 func main() {
+	// Set default environment if not provided by ldflags (e.g., for 'wails dev')
+	if AppEnvironment == "" {
+		AppEnvironment = "development"
+	}
+	log.Printf("Application starting in '%s' mode", AppEnvironment)
+
 	// Create an instance of the app structure
-	application := app.NewApp()
+	application := app.NewApp(AppEnvironment)
 
 	// Create application with options
 	err := wails.Run(&options.App{
